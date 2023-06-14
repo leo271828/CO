@@ -48,6 +48,10 @@ void cache_sim_t::init()
   for (size_t x = linesz; x>1; x >>= 1)
     idx_shift++;
 
+  lfu_counters = new size_t[sets * ways];
+  for(size_t i=0;i<sets*ways;i++)
+    lfu_counters[i] = 0;
+
   tags = new uint64_t[sets*ways]();
   read_accesses = 0;
   read_misses = 0;
@@ -71,6 +75,7 @@ cache_sim_t::cache_sim_t(const cache_sim_t& rhs)
 cache_sim_t::~cache_sim_t()
 {
   print_stats();
+  delete [] lfu_counters;
   delete [] tags;
 }
 
@@ -99,7 +104,7 @@ void cache_sim_t::print_stats()
   std::cout << name << " ";
   std::cout << "Miss Rate:             " << mr << '%' << std::endl;
 }
-
+/*
 uint64_t* cache_sim_t::check_tag(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
@@ -119,6 +124,52 @@ uint64_t cache_sim_t::victimize(uint64_t addr)
   uint64_t victim = tags[idx*ways + way];
   tags[idx*ways + way] = (addr >> idx_shift) | VALID;
   return victim;
+}
+*/
+uint64_t* cache_sim_t::check_tag(uint64_t addr)
+{
+  size_t idx = (addr >> idx_shift) & (sets-1);
+  size_t tag = (addr >> idx_shift) | VALID;
+
+  // 找到標籤匹配的快取行
+  for (size_t i = 0; i < ways; i++)
+  {
+    if (tag == (tags[idx*ways + i] & ~DIRTY))
+    {
+      // 增加 LFU 計數器
+      lfu_counters[idx*ways + i]++;
+      return &tags[idx*ways + i];
+    }
+  }
+
+  return NULL;
+}
+
+uint64_t cache_sim_t::victimize(uint64_t addr)
+{
+  size_t idx = (addr >> idx_shift) & (sets-1);
+
+  // 找到 LFU 計數器最小的快取行
+  size_t min_lfu = 9999999;
+  size_t victim = 0;
+  for (size_t i = 0; i < ways; i++)
+  {
+    if (lfu_counters[idx*ways + i] < min_lfu)
+    {
+      min_lfu = lfu_counters[idx*ways + i];
+      victim = i;
+    }
+  }
+
+  uint64_t evicted_tag = tags[idx*ways + victim];
+
+  // 重置 LFU 計數器
+  lfu_counters[idx*ways + victim] = 0;
+
+  // 更新被淘汰的快取行
+  tags[idx*ways + victim] = (addr >> idx_shift) | VALID;
+
+  return evicted_tag;
 }
 
 void cache_sim_t::access(uint64_t addr, size_t bytes, bool store)

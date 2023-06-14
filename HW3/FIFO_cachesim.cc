@@ -119,7 +119,7 @@ uint64_t cache_sim_t::victimize(uint64_t addr)
   size_t idx = (addr >> idx_shift) & (sets-1);
   uint64_t victim = tags[idx*ways + fifo_pointers[idx]];
   tags[idx*ways + fifo_pointers[idx]] = (addr >> idx_shift) | VALID;
-  fifo_pointers[idx] = (fifo_pointers[idx] + 1) % ways; // 更新FIFO指针
+  fifo_pointers[idx] = (fifo_pointers[idx] + 1) % ways;
   return victim;
 }
 

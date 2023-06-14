@@ -61,6 +61,7 @@ class cache_sim_t
   uint64_t writebacks;
 
   std::string name;
+  size_t *lfu_counters;
   bool log;
 
   void init();

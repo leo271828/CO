@@ -63,7 +63,6 @@ class cache_sim_t
   uint64_t writebacks;
 
   size_t *fifo_pointers;
-  std::queue<size_t> q;
   std::string name;
   bool log;
 

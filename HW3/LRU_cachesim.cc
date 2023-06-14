@@ -48,6 +48,10 @@ void cache_sim_t::init()
   for (size_t x = linesz; x>1; x >>= 1)
     idx_shift++;
 
+  lru_counters = new size_t[sets * ways];
+  for(size_t i=0; i<sets*ways; i++)
+    lru_counters[i] = 0;
+
   tags = new uint64_t[sets*ways]();
   read_accesses = 0;
   read_misses = 0;
@@ -71,6 +75,7 @@ cache_sim_t::cache_sim_t(const cache_sim_t& rhs)
 cache_sim_t::~cache_sim_t()
 {
   print_stats();
+  delete [] lru_counters;
   delete [] tags;
 }
 
@@ -105,20 +110,53 @@ uint64_t* cache_sim_t::check_tag(uint64_t addr)
   size_t idx = (addr >> idx_shift) & (sets-1);
   size_t tag = (addr >> idx_shift) | VALID;
 
+  // 找到標籤匹配的快取行
   for (size_t i = 0; i < ways; i++)
+  {
     if (tag == (tags[idx*ways + i] & ~DIRTY))
+    {
+      // 更新 LRU 計數器
+      for (size_t j = 0; j < ways; j++)
+        if (lru_counters[idx*ways + j] < lru_counters[idx*ways + i])
+          lru_counters[idx*ways + j]++;
+      
+      lru_counters[idx*ways + i] = 0;
       return &tags[idx*ways + i];
+    }
+  }
 
   return NULL;
 }
-
 uint64_t cache_sim_t::victimize(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
-  size_t way = lfsr.next() % ways;
-  uint64_t victim = tags[idx*ways + way];
-  tags[idx*ways + way] = (addr >> idx_shift) | VALID;
-  return victim;
+
+  // 找到 LRU 計數器最大的快取行
+  size_t max_lru = 0;
+  size_t victim = 0;
+  for (size_t i = 0; i < ways; i++)
+  {
+    if (lru_counters[idx*ways + i] > max_lru)
+    {
+      max_lru = lru_counters[idx*ways + i];
+      victim = i;
+    }
+  }
+
+  uint64_t evicted_tag = tags[idx*ways + victim];
+
+  // 更新 LRU 計數器
+  for (size_t i = 0; i < ways; i++)
+  {
+    if (i != victim)
+      lru_counters[idx*ways + i]++;
+  }
+  lru_counters[idx*ways + victim] = 0;
+
+  // 更新被淘汰的快取行
+  tags[idx*ways + victim] = (addr >> idx_shift) | VALID;
+
+  return evicted_tag;
 }
 
 void cache_sim_t::access(uint64_t addr, size_t bytes, bool store)

@@ -60,6 +60,7 @@ class cache_sim_t
   uint64_t bytes_written;
   uint64_t writebacks;
 
+  size_t *lru_counters;
   std::string name;
   bool log;
 
