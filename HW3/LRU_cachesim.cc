@@ -48,6 +48,7 @@ void cache_sim_t::init()
   for (size_t x = linesz; x>1; x >>= 1)
     idx_shift++;
 
+  // actually, this 1d array is equal to a 2d array
   lru_counters = new size_t[sets * ways];
   for(size_t i=0; i<sets*ways; i++)
     lru_counters[i] = 0;
@@ -110,16 +111,19 @@ uint64_t* cache_sim_t::check_tag(uint64_t addr)
   size_t idx = (addr >> idx_shift) & (sets-1);
   size_t tag = (addr >> idx_shift) | VALID;
 
-  // 找到標籤匹配的快取行
-  for (size_t i = 0; i < ways; i++)
-  {
-    if (tag == (tags[idx*ways + i] & ~DIRTY))
-    {
-      // 更新 LRU 計數器
+  // LRU policy based on the "access time"
+  // find the caching line matched with the tag
+  for (size_t i = 0; i < ways; i++){
+    if (tag == (tags[idx*ways + i] & ~DIRTY)){
+      
+      // update the other value in the caching line
+      // like a sorting, e.g. 1 2 3* 4 --> (1+1) (2+1) (0) 4 --> 0 2 3 4
       for (size_t j = 0; j < ways; j++)
         if (lru_counters[idx*ways + j] < lru_counters[idx*ways + i])
           lru_counters[idx*ways + j]++;
       
+      // zero is the resently used
+      // the selected caching line would not increase
       lru_counters[idx*ways + i] = 0;
       return &tags[idx*ways + i];
     }
@@ -131,32 +135,25 @@ uint64_t cache_sim_t::victimize(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
 
-  // 找到 LRU 計數器最大的快取行
+  // find the max caching line
   size_t max_lru = 0;
-  size_t victim = 0;
+  size_t v_idx = 0;
   for (size_t i = 0; i < ways; i++)
-  {
-    if (lru_counters[idx*ways + i] > max_lru)
-    {
+    if (lru_counters[idx*ways + i] > max_lru){
       max_lru = lru_counters[idx*ways + i];
-      victim = i;
+      v_idx = i;
     }
-  }
 
-  uint64_t evicted_tag = tags[idx*ways + victim];
-
-  // 更新 LRU 計數器
+  // update the other caching line
   for (size_t i = 0; i < ways; i++)
-  {
-    if (i != victim)
+    if (i != v_idx)
       lru_counters[idx*ways + i]++;
-  }
-  lru_counters[idx*ways + victim] = 0;
+  
+  uint64_t victim = tags[idx*ways + v_idx];
 
-  // 更新被淘汰的快取行
-  tags[idx*ways + victim] = (addr >> idx_shift) | VALID;
-
-  return evicted_tag;
+  tags[idx*ways + v_idx] = (addr >> idx_shift) | VALID;
+  lru_counters[idx*ways + v_idx] = 0;
+  return victim;
 }
 
 void cache_sim_t::access(uint64_t addr, size_t bytes, bool store)

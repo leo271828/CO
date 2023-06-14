@@ -48,7 +48,7 @@ void cache_sim_t::init()
   for (size_t x = linesz; x>1; x >>= 1)
     idx_shift++;
 
-  fifo_pointers = (size_t*)malloc(sets * sizeof(size_t));
+  fifo_counts = (size_t*)malloc(sets * sizeof(size_t));
 
   tags = new uint64_t[sets*ways]();
   read_accesses = 0;
@@ -73,7 +73,7 @@ cache_sim_t::cache_sim_t(const cache_sim_t& rhs)
 cache_sim_t::~cache_sim_t()
 {
   print_stats();
-  free(fifo_pointers);
+  free(fifo_counts);
   delete [] tags;
 }
 
@@ -117,9 +117,10 @@ uint64_t* cache_sim_t::check_tag(uint64_t addr)
 uint64_t cache_sim_t::victimize(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
-  uint64_t victim = tags[idx*ways + fifo_pointers[idx]];
-  tags[idx*ways + fifo_pointers[idx]] = (addr >> idx_shift) | VALID;
-  fifo_pointers[idx] = (fifo_pointers[idx] + 1) % ways;
+  uint64_t victim = tags[idx*ways + fifo_counts[idx]];
+  
+  tags[idx*ways + fifo_counts[idx]] = (addr >> idx_shift) | VALID;
+  fifo_counts[idx] = (fifo_counts[idx] + 1) % ways;
   return victim;
 }
 

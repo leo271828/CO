@@ -104,39 +104,16 @@ void cache_sim_t::print_stats()
   std::cout << name << " ";
   std::cout << "Miss Rate:             " << mr << '%' << std::endl;
 }
-/*
+
 uint64_t* cache_sim_t::check_tag(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
   size_t tag = (addr >> idx_shift) | VALID;
 
-  for (size_t i = 0; i < ways; i++)
-    if (tag == (tags[idx*ways + i] & ~DIRTY))
-      return &tags[idx*ways + i];
-
-  return NULL;
-}
-
-uint64_t cache_sim_t::victimize(uint64_t addr)
-{
-  size_t idx = (addr >> idx_shift) & (sets-1);
-  size_t way = lfsr.next() % ways;
-  uint64_t victim = tags[idx*ways + way];
-  tags[idx*ways + way] = (addr >> idx_shift) | VALID;
-  return victim;
-}
-*/
-uint64_t* cache_sim_t::check_tag(uint64_t addr)
-{
-  size_t idx = (addr >> idx_shift) & (sets-1);
-  size_t tag = (addr >> idx_shift) | VALID;
-
-  // 找到標籤匹配的快取行
-  for (size_t i = 0; i < ways; i++)
-  {
-    if (tag == (tags[idx*ways + i] & ~DIRTY))
-    {
-      // 增加 LFU 計數器
+  // LFU policy based on the "access counts"
+  for (size_t i = 0; i < ways; i++){
+    if (tag == (tags[idx*ways + i] & ~DIRTY)){
+      
       lfu_counters[idx*ways + i]++;
       return &tags[idx*ways + i];
     }
@@ -149,27 +126,26 @@ uint64_t cache_sim_t::victimize(uint64_t addr)
 {
   size_t idx = (addr >> idx_shift) & (sets-1);
 
-  // 找到 LFU 計數器最小的快取行
-  size_t min_lfu = 9999999;
-  size_t victim = 0;
-  for (size_t i = 0; i < ways; i++)
-  {
-    if (lfu_counters[idx*ways + i] < min_lfu)
-    {
+  // find the min access counts(times)
+  // take example: 100, 3, 2, 1
+  //                |         |
+  //                |         |
+  //               lru       lfu
+  
+  size_t min_lfu = 99999;
+  size_t v_idx = 0;
+  for (size_t i = 0; i < ways; i++){
+    if (lfu_counters[idx*ways + i] < min_lfu){
       min_lfu = lfu_counters[idx*ways + i];
-      victim = i;
+      v_idx = i;
     }
   }
 
-  uint64_t evicted_tag = tags[idx*ways + victim];
+  uint64_t victim = tags[idx*ways + v_idx];
 
-  // 重置 LFU 計數器
-  lfu_counters[idx*ways + victim] = 0;
-
-  // 更新被淘汰的快取行
-  tags[idx*ways + victim] = (addr >> idx_shift) | VALID;
-
-  return evicted_tag;
+  tags[idx*ways + v_idx] = (addr >> idx_shift) | VALID;
+  lfu_counters[idx*ways + v_idx] = 0;
+  return victim;
 }
 
 void cache_sim_t::access(uint64_t addr, size_t bytes, bool store)

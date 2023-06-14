@@ -62,7 +62,7 @@ class cache_sim_t
   uint64_t bytes_written;
   uint64_t writebacks;
 
-  size_t *fifo_pointers;
+  size_t *fifo_counts;
   std::string name;
   bool log;
 
